@@ -1,4 +1,4 @@
-import { Client as DiscordClient, EmbedBuilder, TextChannel, Webhook } from "discord.js";
+import { Client as DiscordClient, EmbedBuilder, GuildEmoji, TextChannel, Webhook } from "discord.js";
 import npmlog from "npmlog";
 import { Client as RevoltClient } from "revolt.js";
 import { Message } from "revolt.js/dist/maps/Messages";
@@ -17,12 +17,13 @@ import {
 
 /**
  * Format a Revolt message with all attachments to Discord-friendly format
+ * @param discord Discord client
  * @param revolt Revolt client
  * @param message Revolt message object
  * @param ping ID of the user to ping
  * @returns Formatted string
  */
-async function formatMessage(revolt: RevoltClient, message: Message) {
+async function formatMessage(discord: DiscordClient, revolt: RevoltClient, message: Message) {
   let messageString = "";
   let content = message.content.toString();
 
@@ -68,6 +69,10 @@ async function formatMessage(revolt: RevoltClient, message: Message) {
   }
 
   // Handle emojis
+  
+  let discordEmojis = discord.emojis.cache;
+  let revoltEmojis = revolt.emojis
+
   const emojis = content.match(RevoltEmojiPattern);
   if (emojis) {
     emojis.forEach((emoji, i) => {
@@ -77,6 +82,17 @@ async function formatMessage(revolt: RevoltClient, message: Message) {
 
       if (dissected != null) {
         const emojiId = dissected.groups["id"];
+        
+        if (revoltEmojis.has(emojiId)) {
+          // Look for emoji under the same name. If there is one, use it.
+          let discordEmoji: GuildEmoji | undefined = discordEmojis.find((emoji) => 
+            emoji.name == revoltEmojis.get(emojiId).name
+          )
+          if (discordEmoji) {
+            content = content.replace(emoji, `<:${discordEmoji.name}:${discordEmoji.id}>`);
+            return
+          }
+        }
 
         if (emojiId) {
           let emojiUrl: string;
@@ -195,7 +211,7 @@ export async function handleRevoltMessage(
         }
       }
 
-      let messageString = await formatMessage(revolt, message);
+      let messageString = await formatMessage(discord, revolt, message);
 
       let embed =
         reply &&
@@ -282,10 +298,11 @@ export async function sendDiscordMessage(
 
 /**
  * Handle Revolt message update and update the relevant message in Discord
+ * @param discord Discord client
  * @param revolt Revolt client
  * @param message Discord message object
  */
-export async function handleRevoltMessageUpdate(revolt: RevoltClient, message: Message) {
+export async function handleRevoltMessageUpdate(discord: DiscordClient, revolt: RevoltClient, message: Message) {
   // Find target Discord channel
   const target = Main.mappings.find((mapping) => mapping.revolt === message.channel_id);
 
@@ -301,7 +318,7 @@ export async function handleRevoltMessageUpdate(revolt: RevoltClient, message: M
         );
 
         if (webhook) {
-          const messageString = await formatMessage(revolt, message);
+          const messageString = await formatMessage(discord, revolt, message);
 
           await webhook.editMessage(cachedMessage.createdMessage, {
             content: messageString,

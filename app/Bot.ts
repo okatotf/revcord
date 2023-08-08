@@ -229,7 +229,7 @@ export class Bot {
 
       if (typeof message.content != "string") return;
 
-      handleRevoltMessageUpdate(this.revolt, message);
+      handleRevoltMessageUpdate(this.discord, this.revolt, message);
     });
 
     this.revolt.on("message/delete", async (id) => {
